@@ -15,8 +15,8 @@
 //esp library ETH does not work with the w5500
 byte mac[] = { 0x74, 0x69, 0x69, 0x2D, 0x32, 0x33 };  // ethernet mac address - harus unik <perbarui untuk setiap kode esp>
 
-String readString;                   //var for url requested, this allows us to serve different pages based on the url
-String API_HOST = "192.168.43.251";  // Host API
+String readString;                  //var for url requested, this allows us to serve different pages based on the url
+String API_HOST = "192.168.137.1";  // Host API
 String API_MAPPING = "/ProyekKupon/api/mapping_arduino_katering/select";
 String API_RFID = "/ProyekKupon/api/rfid/select";
 String API_TRANSACTION = "/ProyekKupon/api/kupon_harian/insert";
@@ -95,7 +95,7 @@ void setup() {
   MySerial.begin(9600);
   //untuk loading serial dan koneksi eth
   delay(2000);
-  
+
   // Mengatur pin sebagai output
   pinMode(ledPin, OUTPUT);
   pinMode(MFRC522_CS, OUTPUT);
@@ -110,10 +110,10 @@ void setup() {
   // SPI2.begin(14,12,13,5);
   // Konek ke ethernet
   // digitalWrite(W5500_CS, LOW);     // Aktifkan W5500
-  Ethernet.init(W5500_CS);         // Inisialisasi Ethernet
+  Ethernet.init(W5500_CS);  // Inisialisasi Ethernet
   bool isConnected = connect_ethernet();
   // digitalWrite(W5500_CS, HIGH);    // Nonaktifkan W5500 setelah inisialisasi
-  
+
   if (isConnected) {
     MySerial.println("===TERHUBUNG KE ETHERNET===");
     MySerial.println("Dekatkan kartu ke reader!");
@@ -124,45 +124,24 @@ void setup() {
   // Inisialisasi MFRC522
   // digitalWrite(MFRC522_CS, LOW);   // Aktifkan MFRC522
   // SPI.begin(14, 12, 13, MFRC522_CS);           // Konfigurasi pin SPI untuk MFRC522
-  mfrc522.PCD_Init();              // Inisialisasi MFRC522
+  mfrc522.PCD_Init();  // Inisialisasi MFRC522
   // digitalWrite(MFRC522_CS, HIGH);  // Nonaktifkan MFRC522 setelah inisialisasi
 }
 
 void loop() {
-  // Nonaktifkan W5500 saat mengakses MFRC522
-  // digitalWrite(W5500_CS, HIGH);   // Nonaktifkan W5500
-  // digitalWrite(MFRC522_CS, LOW);  // Aktifkan MFRC522
-  
-  // Cek apakah ada kartu baru yang terdeteksi
-  if (!mfrc522.PICC_IsNewCardPresent()) {
-    // digitalWrite(MFRC522_CS, HIGH);  // Nonaktifkan MFRC522 setelah selesai
-    return;  // Jika tidak ada kartu, keluar dari loop
+  Ethernet.maintain();
+  Serial.println("belum ada kartu");
+  Serial.print("Status ETH : ");
+  Serial.println(Ethernet.linkStatus());
+  String rfid_uid = readRfid();
+  if (rfid_uid != "") {
+    // if(getMapping(id_arduino)){
+    //   sendTransaksi(id_arduino, id_kantin, id_katering, 2);
+    // }
+    Serial.println(rfid_uid);
   }
-
-  // Cek apakah bisa membaca serial dari kartu
-  if (!mfrc522.PICC_ReadCardSerial()) {
-    // digitalWrite(MFRC522_CS, HIGH);  // Nonaktifkan MFRC522 setelah selesai
-    return;  // Jika gagal membaca kartu, keluar dari loop
-  }
-
-  // Tampilkan UID kartu
-  MySerial.print("UID Kartu: ");
-  for (byte i = 0; i < mfrc522.uid.size; i++) {
-    MySerial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");  // Tambahkan nol jika nilai kurang dari 0x10
-    MySerial.print(mfrc522.uid.uidByte[i], HEX);  // Cetak byte UID dalam format HEX
-  }
-  MySerial.println();  // Tambahkan baris baru setelah menampilkan UID
-
-  // Nonaktifkan MFRC522 setelah selesai
-  // digitalWrite(MFRC522_CS, HIGH);
-
-  // Tambahkan delay kecil untuk mencegah pembacaan kartu berulang terlalu cepat
-  delay(1000);
-
-  // Aktifkan kembali W5500 setelah selesai mengakses MFRC522
-  // digitalWrite(W5500_CS, LOW);   // Aktifkan W5500
+  delay(2000);
 }
-
 
 /*
   function untuk connect ke ethernet dan mendapatkan IP address dari router/laptop/switch
@@ -208,15 +187,15 @@ bool connect_ethernet() {
     String content : mengembalikan string UID kartu  
 */
 String readRfid() {
-  digitalWrite(W5500_CS, HIGH);  // Nonaktifkan W5500
-  digitalWrite(MFRC522_CS, LOW);
+  // digitalWrite(W5500_CS, HIGH);  // Nonaktifkan W5500
+  // digitalWrite(MFRC522_CS, LOW);
   //deteksi apakah ada kartu atau select jika ada kartu
   if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial()) {
     return "";
   }
-// Saat ingin menggunakan Ethernet:
-  digitalWrite(MFRC522_CS, HIGH);  // Nonaktifkan MFRC522
-  
+  // Saat ingin menggunakan Ethernet:
+  // digitalWrite(MFRC522_CS, HIGH);  // Nonaktifkan MFRC522
+
   //membaca uid
   Serial.print("UID tag : ");
   String content = "";
@@ -245,17 +224,17 @@ String readRfid() {
   } else {
     uidCard = content;
     // insertArduino(content);
-    digitalWrite(W5500_CS, LOW);  // Aktifkan W5500
+    // digitalWrite(W5500_CS, LOW);  // Aktifkan W5500
     // Proses Ethernet
-    Ethernet.maintain();
     bool get_map = getMapping(id_arduino);
 
     if (get_map == true) {
       sendTransaksi(id_arduino, id_kantin, id_katering, content);
+      Serial.println("===TERKIRIM===");
+      Serial.println("id_Arduino : " + String(id_arduino) + "id_kantin : " + String(id_kantin) + "id_katering : " + String(id_katering) + "RFID : " + String(content));
     }
     // sendTransaksi("AD 12T 5", 1, 1, content);
-    digitalWrite(W5500_CS, HIGH);
-
+    // digitalWrite(W5500_CS, HIGH);
   }
   return content;
 }
@@ -274,7 +253,7 @@ String readRfid() {
 
 */
 bool getMapping(String id_arduino) {
-  if (Ethernet.linkStatus() == LinkON) {
+  if (Ethernet.linkStatus() == 1) {
     if (client.connect(API_HOST.c_str(), 80)) {
       MySerial.println("Connected to server");
 
@@ -342,6 +321,15 @@ bool sendTransaksi(String id_arduino, int id_kantin, int id_katering, String no_
   if (Ethernet.linkStatus() == LinkON) {
     if (client.connect(API_HOST.c_str(), 80)) {
       MySerial.println("Connected to server");
+      // Trim left pada no_rfid (menghapus spasi di depan)
+      while (no_rfid.length() > 0 && no_rfid[0] == ' ') {
+        no_rfid.remove(0, 1);  // hapus karakter pertama jika spasi
+      }
+
+      Serial.println("RFID SEND : " + no_rfid);
+      Serial.println("ID ARDUINO SEND : " + id_arduino);
+      Serial.println("ID KANTIN SEND : " + String(id_kantin));
+      Serial.println("ID KATERING SEND : " + String(id_katering));
 
       // Data yang akan dikirimkan dalam format JSON
       String postData = "{\"id_arduino\":\"" + id_arduino + "\","
@@ -375,13 +363,27 @@ bool sendTransaksi(String id_arduino, int id_kantin, int id_katering, String no_
       // Baca body response
       String responseBody = client.readString();
       MySerial.println("Response body: " + responseBody);
-
-      client.stop();  // Tutup koneksi
-
+      return true;
     } else {
-      MySerial.println("Connection to server failed");
+      MySerial.println("Connection to server transaksi failed");
+      return false;
     }
+    int size;
+    while ((size = client.available()) > 0) {
+      Serial.print("Size is: ");
+      Serial.println(size);
+      uint8_t* msg = (uint8_t*)malloc(size + 1);
+      memset(msg, 0, size + 1);
+      size = client.read(msg, size);
+      Serial.print("Size1 is: ");
+      Serial.println(size);
+      Serial.write(msg, size);
+      free(msg);
+    }
+    client.stop();  // Tutup koneksi
+    // Ethernet.maintain();
+    return false;
   }
-
-  delay(1000);
+  // delay(1000);
+  return false;
 }
