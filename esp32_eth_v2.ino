@@ -9,6 +9,7 @@
 #include <Wire.h>
 #include <TFT_eSPI.h>       // Hardware-specific library
 #include <EthernetESP32.h>  //library modifikasi dari Ethernet.h
+//audio library dan audio file
 #include "AudioGeneratorAAC.h"
 #include "AudioOutputI2S.h"
 #include "AudioFileSourcePROGMEM.h"
@@ -28,7 +29,11 @@
 #include "salah_kantin.h"
 #include "berhasil.h"
 #include "beep.h"
+#include "connected.h"
 
+/*
+  kode untuk set pin pada modul amplifier MAX98357A
+*/
 #define Bit_Clock_BCLK 27
 #define Word_Select_WS 26
 #define Serial_Data_SD 25
@@ -38,12 +43,8 @@ AudioFileSourcePROGMEM *in;
 AudioGeneratorAAC *aac;
 AudioOutputI2S *out;
 
-// #include <Ethernetclient.h>
-// #include "defines.h"
-// You must have SSL Certificates here
-// #include "trust_anchors.h"
-//esp library ETH does not work with the w5500
-byte mac[] = { 0x74, 0x69, 0x69, 0x2D, 0x32, 0x33 };  // ethernet mac address - harus unik <perbarui untuk setiap kode esp>
+// ethernet mac address - harus unik <perbarui untuk setiap kode esp>
+byte mac[] = { 0x74, 0x69, 0x69, 0x2D, 0x32, 0x33 };  
 
 String readString;  //var for url requested, this allows us to serve different pages based on the url
 // String API_HOST = "https://freetestapi.com/api/v1/users/1";  // Host API
@@ -54,11 +55,10 @@ String API_RFID = "/ProyekKupon/api/rfid/select";
 String API_TRANSACTION = "/ProyekKupon/api/kupon_harian/insert";
 String API_ARDUINO = "/ProyekKupon/api/arduino/insert";
 String API_KUPON = "/ProyekKupon/api/kupon_harian/select";
-// extern SPIClass SPI2;
 //init Ethernet
 EthernetServer server(80);  //set HTTP server port
 EthernetClient client;
-// Ethernetclient client(client, TAs, (size_t)TAs_NUM);
+
 /*
 variabel untuk menyimpan data id kantin & katering saat mencari
 dengan mapping_arduino_katering
@@ -75,32 +75,39 @@ String ip_arduino;
 //variabel untuk id unik alat
 String id_arduino = "GR 45 T";
 // Pin GPIO yang terhubung ke LED
-const int ledPin = 14;
+const int ledPin = 13;
 
-int nik;
+/*
+  untuk menyimpan data setelah getTransaksiPerDay() dijalankan
+*/
+String nik;
 String status;
 String error;
 int jumlah = 0;
 
-TFT_eSPI tft = TFT_eSPI();  // Invoke custom library
+//inisiasi objek untuk LCD TFT
+TFT_eSPI tft = TFT_eSPI();  
 
-#define TFT_GREY 0x5AEB  // New colour
-
-
-//konfigurasi scs w5500
+//konfigurasi pin CS modul W5500 ethernet 
 #define W5500_CS 21
 
-//konfigurasi pin untuk rfid
+//konfigurasi pin untuk rfid modul
 #define RST_PIN 22
 #define MFRC522_CS 5
+
 //inisiasi rfid
 MFRC522 mfrc522(MFRC522_CS, RST_PIN);
 bool berhasil_ = false;
+
 /*
+////////////////////////////////////////////////////
+//                KONFIGURASI PIN                //
+//////////////////////////////////////////////////
+
 /////////////////////////////////////////
 //           W5500 - ESP32            //
 ///////////////////////////////////////
-VSPI 
+
 5V - No Connection (NC)
 GND - GND 
 RST - NC
@@ -118,7 +125,6 @@ SCLK - GPIO 18
 //           MFRC522 - ESP32            //
 ///////////////////////////////////////
 
-//HSPI MFRC522
 RST: GPIO 22
 SDA (CS): GPIO 5
 SCK (SCLK): GPIO 18
@@ -126,17 +132,46 @@ MOSI: GPIO 23
 MISO: GPIO 19
 IRQ: (optional) NC
 
+
+////////////////////////////////////////////
+//              LCD TFT                  //
+//////////////////////////////////////////
+
+MISO - 19
+MOSI - 23
+SCLK - 18
+CS -  15   // Chip select control pin
+DC  - 14   // Data Command control pin
+RST - 17   // Reset pin (could connect to RST pin)
+TOUCH_CS - 4     // Chip select pin (T_CS) of touch screen
+
+
+/////////////////////////////////////////
+//              MAX98357A             //
+///////////////////////////////////////
+LRC - 26
+BCLK - 27
+DIN - 25
+GAIN - GND
+SD - NOT CONNECTED
+
+
+
 SPI	MOSI	MISO	SCK	CS
+-------------------------------------
 HSPI	GPIO 13	GPIO 12	GPIO 14	GPIO 15
 VSPI	GPIO 23	GPIO 19	GPIO 18	GPIO 5
-18, 19, 23, cs
+-------------------------------------
+
+NOTE ** :
+ pakai VSPI Bus semua : -> 18, 19, 23, CS
+
 */
 
-
-// int count = 0;
-
+/*
+  import array image logo konimex
+*/
 #include <stdint.h>
-// #include "image_data_gl.h"
 #include "image_data_kk.h"
 
 
@@ -145,11 +180,7 @@ void setup() {
 
   MySerial.begin(9600);
 
-  // out = new AudioOutputI2S();
-  // out->SetGain(GAIN);
-  // out->SetPinout(Bit_Clock_BCLK, Word_Select_WS, Serial_Data_SD);
-  // aac = new AudioGeneratorAAC();
-
+  //inisiasi SPI Bus pada VSPI
   SPI.begin(18, 19, 23, MFRC522_CS);
   tft.init();
   tft.setRotation(1);
@@ -183,6 +214,7 @@ void setup() {
   out->SetPinout(Bit_Clock_BCLK, Word_Select_WS, Serial_Data_SD);
 
   aac = new AudioGeneratorAAC();
+  playSound(connected, sizeof(connected));
 }
 
 void loop() {
@@ -190,11 +222,6 @@ void loop() {
   Ethernet.maintain();
 
   String rfid_uid = readRfid();
-
-  if (rfid_uid != "") {
-    Serial.println(rfid_uid);
-  }
-
   showScreen(katering, jumlah, nik, status, error);
   delay(700);
 }
@@ -269,18 +296,9 @@ String readRfid() {
   Serial.println(content);
   //handle jika user sudah melakukan scan
   if (uidCard == content) {
-    Serial.println("Sudah Scan");
+    // Serial.println("Sudah Scan");
     //play sudah scan 
     playSound(sudah_scan, sizeof(sudah_scan));
-
-    digitalWrite(ledPin, HIGH);
-    delay(100);
-    digitalWrite(ledPin, LOW);
-    delay(100);
-    digitalWrite(ledPin, HIGH);
-    delay(100);
-    digitalWrite(ledPin, LOW);
-    delay(100);
     showScreen(katering, jumlah, nik, "gagal", "Sudah Scan");
   } else {
     uidCard = content;
@@ -292,8 +310,8 @@ String readRfid() {
 
     if (get_map == true) {
       sendTransaksi(id_arduino, id_kantin, id_katering, content);
-      Serial.println("===TERKIRIM===");
-      Serial.println("id_Arduino : " + String(id_arduino) + "id_kantin : " + String(id_kantin) + "id_katering : " + String(id_katering) + "RFID : " + String(content));
+      // Serial.println("===TERKIRIM===");
+      // Serial.println("id_Arduino : " + String(id_arduino) + "id_kantin : " + String(id_kantin) + "id_katering : " + String(id_katering) + "RFID : " + String(content));
       getTransaksiPerDay(id_arduino);
       if(status == "berhasil"){
           playSound(berhasil, sizeof(berhasil));
@@ -305,20 +323,8 @@ String readRfid() {
           playSound(salah_kantin, sizeof(salah_kantin));
         }
       }
-      // if (aac->isRunning()) {
-      //   aac->loop();
-      // } else {
-      //   delete in;
-      //   in = new AudioFileSourcePROGMEM(kantin_natpro, sizeof(kantin_natpro));
-      //   aac->begin(in, out);
-      //   while (aac->isRunning()) {
-      //     aac->loop();
-      //   }
-      //   delay(2000);
-      // }
     }
-    // sendTransaksi("AD 12T 5", 1, 1, content);
-    // digitalWrite(W5500_CS, HIGH);
+    
   }
   return content;
 }
@@ -366,7 +372,7 @@ bool getMapping(String id_arduino) {
 
       // Baca body response
       String responseBody = client.readString();
-      MySerial.println("Response body: " + responseBody);
+      // MySerial.println("Response body: " + responseBody);
 
       //consume json response dari api
       DynamicJsonDocument doc(1024);
@@ -389,12 +395,16 @@ bool getMapping(String id_arduino) {
       condition = false;
     }
   }
-
-  // delay(1000);
   return condition;
 }
 
-
+/*
+  Function untuk mendapatkan data transaksi per hari.
+  params:
+    id_arduino (str) : inputan id arduino masing-masing
+  returns:
+    condition (boolean) : true/false kondisi request ke server;
+*/
 bool getTransaksiPerDay(String id_arduino) {
   bool condition = false;
   if (Ethernet.linkStatus() == 1) {
@@ -425,7 +435,7 @@ bool getTransaksiPerDay(String id_arduino) {
 
       // Baca body response
       String responseBody = client.readString();
-      MySerial.println("Response body: " + responseBody);
+      // MySerial.println("Response body: " + responseBody);
 
       //consume json response dari api
       DynamicJsonDocument doc(1024);
@@ -434,7 +444,7 @@ bool getTransaksiPerDay(String id_arduino) {
       //apabila data diterima tidak null, maka simpan ke variabel terkait
       if (doc["status"] != "") {
         jumlah = doc["jumlah"].as<int>();
-        nik = doc["nik"].as<int>();
+        nik = doc["nik"].as<String>();
         status = doc["status"].as<String>();
         error = doc["error"].as<String>();
         condition = true;
@@ -447,13 +457,19 @@ bool getTransaksiPerDay(String id_arduino) {
         condition = false;
       }
     }
-
-    // delay(1000);
     return condition;
   }
 
-
-  void showScreen(String nama_katering, int jumlah, int nik, String status, String error) {
+  /*
+    function untuk membuat tata letak LCD
+    Args:
+      nama_katering (str) : nama_katering sesuai id_arduino
+      jumlah (int) : jumlah transaksi penjualan
+      nik (int) : nik pengguna
+      status (str) : status transaksi (berhasil, gagal);
+      error (str) : jenis error (0, 1, 2)
+  */
+  void showScreen(String nama_katering, int jumlah, String nik, String status, String error) {
 
     tft.fillScreen(TFT_BLACK);
     // tft.pushImage(0, 0, 480, 320, image_data_gl);
@@ -472,7 +488,7 @@ bool getTransaksiPerDay(String id_arduino) {
       tft.print("Katering ");
       tft.println(nama_katering);
 
-      tft.setCursor(tft.width() - 130, 50);
+      tft.setCursor(tft.width() - 140, 50);
       tft.setTextSize(1);
       tft.setTextColor(TFT_WHITE);
       tft.setTextFont(4);
@@ -582,12 +598,10 @@ bool getTransaksiPerDay(String id_arduino) {
             break;
           }
         }
-        digitalWrite(ledPin, LOW);
-        delay(300);
-        digitalWrite(ledPin, HIGH);
+        
         // Baca body response
         String responseBody = client.readString();
-        MySerial.println("Response body: " + responseBody);
+        // MySerial.println("Response body: " + responseBody);
 
         return true;
       } else {
@@ -614,7 +628,12 @@ bool getTransaksiPerDay(String id_arduino) {
     return false;
   }
 
-
+/*
+  Function untuk play sound
+  Args:
+    *data (pointer array) : array dari hasil konversi file audio .aac (.aac -> char array.H)
+    len (int) : panjang array  
+*/
 void playSound(const void *data, uint32_t len){
  if (aac->isRunning()) {
       aac->loop();
@@ -625,11 +644,16 @@ void playSound(const void *data, uint32_t len){
       while (aac->isRunning()) {
         aac->loop();
       }
-      delay(800);
+      delay(600);
     }   
 }
 
 
+/*
+  function untuk play sound khusus untuk jumlah transaksi.
+  Args:
+    s (str) : jumlah transaksi berhasil
+*/
 void playAudioFromString(String s) {
   for (int i = 0; i < s.length(); i++) {
     char character = s[i]; // Ambil setiap karakter
@@ -686,8 +710,6 @@ void playAudioFromString(String s) {
     while(aac->isRunning()){
         aac->loop();
     }
-
-    // aac->stop();
-    // delete in;   
+   
   }
 }
