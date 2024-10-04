@@ -31,6 +31,7 @@
 #include "beep.h"
 #include "connected.h"
 
+
 /*
   kode untuk set pin pada modul amplifier MAX98357A
 */
@@ -49,12 +50,14 @@ byte mac[] = { 0x74, 0x69, 0x69, 0x2D, 0x32, 0x33 };
 String readString;  //var for url requested, this allows us to serve different pages based on the url
 // String API_HOST = "https://freetestapi.com/api/v1/users/1";  // Host API
 // String API_HOST = "blbqfx2p-80.asse.devtunnels.ms";  // Host API
-String API_HOST = "192.168.137.1";  // Host API
-String API_MAPPING = "/ProyekKupon/api/mapping_arduino_katering/select";
-String API_RFID = "/ProyekKupon/api/rfid/select";
-String API_TRANSACTION = "/ProyekKupon/api/kupon_harian/insert";
-String API_ARDUINO = "/ProyekKupon/api/arduino/insert";
-String API_KUPON = "/ProyekKupon/api/kupon_harian/select";
+// String API_HOST = "blbqfx2p-80.asse.devtunnels.ms";  // Host API
+// String API_HOST = "192.168.137.1";  // Host API
+String API_HOST = "192.168.0.119";  // Host API
+String API_MAPPING = "/proyekkuponmakan/api/mapping_arduino_katering/select";
+String API_RFID = "/proyekkuponmakan/api/rfid/select";
+String API_TRANSACTION = "/proyekkuponmakan/api/kupon_harian/insert";
+String API_ARDUINO = "/proyekkuponmakan/api/arduino/insert";
+String API_KUPON = "/proyekkuponmakan/api/kupon_harian/select";
 //init Ethernet
 EthernetServer server(80);  //set HTTP server port
 EthernetClient client;
@@ -179,7 +182,8 @@ NOTE ** :
 void setup() {
 
   MySerial.begin(9600);
-
+  Serial.println("heap :");
+  Serial.println(esp_get_free_heap_size());
   //inisiasi SPI Bus pada VSPI
   SPI.begin(18, 19, 23, MFRC522_CS);
   tft.init();
@@ -218,12 +222,10 @@ void setup() {
 }
 
 void loop() {
-
   Ethernet.maintain();
-
   String rfid_uid = readRfid();
   showScreen(katering, jumlah, nik, status, error);
-  delay(700);
+  delay(100);
 }
 
 
@@ -281,7 +283,7 @@ String readRfid() {
   playSound(beep, sizeof(beep));
 
   //membaca uid
-  Serial.print("UID tag : ");
+  // Serial.print("UID tag : ");
   String content = "";
 
   for (uint8_t i = 0; i < mfrc522.uid.size; i++) {
@@ -291,9 +293,9 @@ String readRfid() {
     content.concat(String(mfrc522.uid.uidByte[i], HEX));
   }
 
-  Serial.println();
-  Serial.print("UID value : ");
-  Serial.println(content);
+  // Serial.println();
+  // Serial.print("UID value : ");
+  // Serial.println(content);
   //handle jika user sudah melakukan scan
   if (uidCard == content) {
     // Serial.println("Sudah Scan");
@@ -306,13 +308,14 @@ String readRfid() {
     // digitalWrite(W5500_CS, LOW);  // Aktifkan W5500
     // Proses Ethernet
     // dummyContoh();
-    bool get_map = getMapping(id_arduino);
+    //////////////coba/////////////////////  
+    // bool get_map = getMapping(id_arduino);
 
-    if (get_map == true) {
+    // if (get_map == true) {
       sendTransaksi(id_arduino, id_kantin, id_katering, content);
       // Serial.println("===TERKIRIM===");
       // Serial.println("id_Arduino : " + String(id_arduino) + "id_kantin : " + String(id_kantin) + "id_katering : " + String(id_katering) + "RFID : " + String(content));
-      getTransaksiPerDay(id_arduino);
+      // getTransaksiPerDay(id_arduino);
       if(status == "berhasil"){
           playSound(berhasil, sizeof(berhasil));
           playAudioFromString(String(jumlah));
@@ -323,7 +326,8 @@ String readRfid() {
           playSound(salah_kantin, sizeof(salah_kantin));
         }
       }
-    }
+    // }
+    //////////////////////////
     
   }
   return content;
@@ -346,13 +350,13 @@ bool getMapping(String id_arduino) {
   bool condition = false;
   if (Ethernet.linkStatus() == 1) {
     if (client.connect(API_HOST.c_str(), 80)) {
-      MySerial.println("Connected to server");
+      // MySerial.println("Connected to server");
 
       // Data yang akan dikirimkan dalam format JSON
       String postData = "{\"id_arduino\":\"" + id_arduino + "\"}";
 
       // Buat request HTTP POST
-      client.println("POST " + API_MAPPING + " HTTP/1.1");
+      client.println("POST " + API_MAPPING + " HTTP/1.0");
       client.println("Host: " + API_HOST);
       client.println("Content-Type: application/json");
       client.println("Connection: close");
@@ -365,13 +369,16 @@ bool getMapping(String id_arduino) {
       while (client.connected()) {
         String line = client.readStringUntil('\n');
         if (line == "\r") {
-          MySerial.println("Headers received");
+          // MySerial.println("Headers received");
           break;
         }
       }
 
       // Baca body response
+      // String responseBody = readChunkedResponse(client);
       String responseBody = client.readString();
+      // String responseBody = readChunkedResponse(client);
+      
       // MySerial.println("Response body: " + responseBody);
 
       //consume json response dari api
@@ -387,6 +394,8 @@ bool getMapping(String id_arduino) {
 
       if (id_katering != 0 && id_kantin != 0) {
         condition = true;
+        // MySerial.print("===id katering : ");
+        // MySerial.println(id_katering);
       }
 
       client.stop();  // Tutup koneksi
@@ -409,13 +418,13 @@ bool getTransaksiPerDay(String id_arduino) {
   bool condition = false;
   if (Ethernet.linkStatus() == 1) {
     if (client.connect(API_HOST.c_str(), 80)) {
-      MySerial.println("Connected to server");
+      // MySerial.println("Connected to server");
 
       // Data yang akan dikirimkan dalam format JSON
       String postData = "{\"id_arduino\":\"" + id_arduino + "\"}";
 
       // Buat request HTTP POST
-      client.println("POST " + API_KUPON + " HTTP/1.1");
+      client.println("POST " + API_KUPON + " HTTP/1.0");
       client.println("Host: " + API_HOST);
       client.println("Content-Type: application/json");
       client.println("Connection: close");
@@ -428,13 +437,17 @@ bool getTransaksiPerDay(String id_arduino) {
       while (client.connected()) {
         String line = client.readStringUntil('\n');
         if (line == "\r") {
-          MySerial.println("Headers received");
+          // MySerial.println("Headers received");
           break;
         }
       }
 
       // Baca body response
+      // String responseBody = readChunkedResponse(client);
+      // String responseBody = readChunkedResponse(client);
       String responseBody = client.readString();
+
+      // MySerial.print("Response getTransaksiPerDay ");
       // MySerial.println("Response body: " + responseBody);
 
       //consume json response dari api
@@ -450,14 +463,20 @@ bool getTransaksiPerDay(String id_arduino) {
         condition = true;
       }
 
-        client.stop();  // Tutup koneksi
+      if (id_katering != 0 && id_kantin != 0) {
+        condition = true;
+        // MySerial.print("===nik : ");
+        // MySerial.println(nik);
       }
-      else {
-        MySerial.println("Connection to server failed");
-        condition = false;
-      }
+
+      client.stop();  // Tutup koneksi
+    } else {
+      MySerial.println("Connection to server failed");
+      condition = false;
     }
-    return condition;
+  }
+  return condition;
+  
   }
 
   /*
@@ -546,7 +565,7 @@ bool getTransaksiPerDay(String id_arduino) {
     }
 
 
-    delay(1000);
+    delay(400);
   }
 
 
@@ -564,7 +583,7 @@ bool getTransaksiPerDay(String id_arduino) {
   bool sendTransaksi(String id_arduino, int id_kantin, int id_katering, String no_rfid) {
     if (Ethernet.linkStatus() == LinkON) {
       if (client.connect(API_HOST.c_str(), 80)) {
-        MySerial.println("Connected to server");
+        // MySerial.println("Connected to server");
         // Trim left pada no_rfid (menghapus spasi di depan)
         while (no_rfid.length() > 0 && no_rfid[0] == ' ') {
           no_rfid.remove(0, 1);  // hapus karakter pertama jika spasi
@@ -581,7 +600,7 @@ bool getTransaksiPerDay(String id_arduino) {
 
 
         // Buat request HTTP POST
-        client.println("POST " + API_TRANSACTION + " HTTP/1.1");
+        client.println("POST " + API_TRANSACTION + " HTTP/1.0");
         client.println("Host: " + API_HOST);
         client.println("Content-Type: application/json");
         client.println("Connection: close");
@@ -594,32 +613,46 @@ bool getTransaksiPerDay(String id_arduino) {
         while (client.connected()) {
           String line = client.readStringUntil('\n');
           if (line == "\r") {
-            MySerial.println("Headers received");
+            // MySerial.println("Headers received");
             break;
           }
         }
         
         // Baca body response
+        // String responseBody = readChunkedResponse(client);
         String responseBody = client.readString();
-        // MySerial.println("Response body: " + responseBody);
+      // MySerial.println("Response sendTransaksi");
+      // MySerial.println("Response body: " + responseBody);
+      
+       //consume json response dari api
+      DynamicJsonDocument doc(1024);
+      deserializeJson(doc, responseBody);
 
+      //apabila data diterima tidak null, maka simpan ke variabel terkait
+      if (doc["status"] != "") {
+        jumlah = doc["jumlah"].as<int>();
+        nik = doc["nik"].as<String>();
+        status = doc["status"].as<String>();
+        error = doc["error"].as<String>();
+        // condition = true;
         return true;
+      }
       } else {
         MySerial.println("Connection to server transaksi failed");
         return false;
       }
-      int size;
-      while ((size = client.available()) > 0) {
-        Serial.print("Size is: ");
-        Serial.println(size);
-        uint8_t *msg = (uint8_t *)malloc(size + 1);
-        memset(msg, 0, size + 1);
-        size = client.read(msg, size);
-        Serial.print("Size1 is: ");
-        Serial.println(size);
-        Serial.write(msg, size);
-        free(msg);
-      }
+      // int size;
+      // while ((size = client.available()) > 0) {
+      //   Serial.print("Size is: ");
+      //   Serial.println(size);
+      //   uint8_t *msg = (uint8_t *)malloc(size + 1);
+      //   memset(msg, 0, size + 1);
+      //   size = client.read(msg, size);
+      //   Serial.print("Size1 is: ");
+      //   Serial.println(size);
+      //   Serial.write(msg, size);
+      //   free(msg);
+      // }
       client.stop();  // Tutup koneksi
       // Ethernet.maintain();
       return false;
@@ -644,7 +677,7 @@ void playSound(const void *data, uint32_t len){
       while (aac->isRunning()) {
         aac->loop();
       }
-      delay(600);
+      delay(200);
     }   
 }
 
