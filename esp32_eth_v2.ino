@@ -45,7 +45,7 @@ AudioGeneratorAAC *aac;
 AudioOutputI2S *out;
 
 // ethernet mac address - harus unik <perbarui untuk setiap kode esp>
-byte mac[] = { 0x74, 0x69, 0x69, 0x2D, 0x32, 0x33 };  
+byte mac[] = { 0x74, 0x69, 0x69, 0x2D, 0x32, 0x33 };
 
 String readString;  //var for url requested, this allows us to serve different pages based on the url
 // String API_HOST = "https://freetestapi.com/api/v1/users/1";  // Host API
@@ -89,9 +89,9 @@ String error;
 int jumlah = 0;
 
 //inisiasi objek untuk LCD TFT
-TFT_eSPI tft = TFT_eSPI();  
+TFT_eSPI tft = TFT_eSPI();
 
-//konfigurasi pin CS modul W5500 ethernet 
+//konfigurasi pin CS modul W5500 ethernet
 #define W5500_CS 21
 
 //konfigurasi pin untuk rfid modul
@@ -224,8 +224,8 @@ void setup() {
 void loop() {
   Ethernet.maintain();
   String rfid_uid = readRfid();
-  showScreen(katering, jumlah, nik, status, error);
-  delay(100);
+  // showScreen(katering, jumlah, nik, status, error);
+  // delay(50);
 }
 
 
@@ -293,42 +293,35 @@ String readRfid() {
     content.concat(String(mfrc522.uid.uidByte[i], HEX));
   }
 
-  // Serial.println();
-  // Serial.print("UID value : ");
-  // Serial.println(content);
   //handle jika user sudah melakukan scan
   if (uidCard == content) {
-    // Serial.println("Sudah Scan");
-    //play sudah scan 
+    //play sudah scan
     playSound(sudah_scan, sizeof(sudah_scan));
     showScreen(katering, jumlah, nik, "gagal", "Sudah Scan");
   } else {
     uidCard = content;
-    // insertArduino(content);
-    // digitalWrite(W5500_CS, LOW);  // Aktifkan W5500
-    // Proses Ethernet
-    // dummyContoh();
-    //////////////coba/////////////////////  
-    // bool get_map = getMapping(id_arduino);
+    /*
+        kirim transaksi ke server
+      */
+    sendTransaksi(id_arduino, id_kantin, id_katering, content);
+    /*
+        cek hasil respon dari server terhadap data transaksi yang diterima, 
+        jika berhasil maka putar audio berhasil, jika gagal maka putar
+        audio sesuai kode error nya.
+      */
+    if (status == "berhasil") {
+      playSound(berhasil, sizeof(berhasil));
+      playAudioFromString(String(jumlah));
+      showScreen(katering, jumlah, nik, status, error);
 
-    // if (get_map == true) {
-      sendTransaksi(id_arduino, id_kantin, id_katering, content);
-      // Serial.println("===TERKIRIM===");
-      // Serial.println("id_Arduino : " + String(id_arduino) + "id_kantin : " + String(id_kantin) + "id_katering : " + String(id_katering) + "RFID : " + String(content));
-      // getTransaksiPerDay(id_arduino);
-      if(status == "berhasil"){
-          playSound(berhasil, sizeof(berhasil));
-          playAudioFromString(String(jumlah));
-      }else{
-        if(error == "1"){
-          playSound(kupon_used, sizeof(kupon_used));
-        }else{
-          playSound(salah_kantin, sizeof(salah_kantin));
-        }
+    } else {
+      if (error == "1") {
+        playSound(kupon_used, sizeof(kupon_used));
+      } else {
+        playSound(salah_kantin, sizeof(salah_kantin));
       }
-    // }
-    //////////////////////////
-    
+      showScreen(katering, jumlah, nik, status, error);
+    }
   }
   return content;
 }
@@ -375,11 +368,7 @@ bool getMapping(String id_arduino) {
       }
 
       // Baca body response
-      // String responseBody = readChunkedResponse(client);
       String responseBody = client.readString();
-      // String responseBody = readChunkedResponse(client);
-      
-      // MySerial.println("Response body: " + responseBody);
 
       //consume json response dari api
       DynamicJsonDocument doc(1024);
@@ -394,8 +383,6 @@ bool getMapping(String id_arduino) {
 
       if (id_katering != 0 && id_kantin != 0) {
         condition = true;
-        // MySerial.print("===id katering : ");
-        // MySerial.println(id_katering);
       }
 
       client.stop();  // Tutup koneksi
@@ -418,7 +405,6 @@ bool getTransaksiPerDay(String id_arduino) {
   bool condition = false;
   if (Ethernet.linkStatus() == 1) {
     if (client.connect(API_HOST.c_str(), 80)) {
-      // MySerial.println("Connected to server");
 
       // Data yang akan dikirimkan dalam format JSON
       String postData = "{\"id_arduino\":\"" + id_arduino + "\"}";
@@ -437,18 +423,12 @@ bool getTransaksiPerDay(String id_arduino) {
       while (client.connected()) {
         String line = client.readStringUntil('\n');
         if (line == "\r") {
-          // MySerial.println("Headers received");
           break;
         }
       }
 
       // Baca body response
-      // String responseBody = readChunkedResponse(client);
-      // String responseBody = readChunkedResponse(client);
       String responseBody = client.readString();
-
-      // MySerial.print("Response getTransaksiPerDay ");
-      // MySerial.println("Response body: " + responseBody);
 
       //consume json response dari api
       DynamicJsonDocument doc(1024);
@@ -465,8 +445,6 @@ bool getTransaksiPerDay(String id_arduino) {
 
       if (id_katering != 0 && id_kantin != 0) {
         condition = true;
-        // MySerial.print("===nik : ");
-        // MySerial.println(nik);
       }
 
       client.stop();  // Tutup koneksi
@@ -476,101 +454,98 @@ bool getTransaksiPerDay(String id_arduino) {
     }
   }
   return condition;
-  
-  }
+}
 
-  /*
+/*
     function untuk membuat tata letak LCD
     Args:
       nama_katering (str) : nama_katering sesuai id_arduino
       jumlah (int) : jumlah transaksi penjualan
-      nik (int) : nik pengguna
+      nik (string) : nik pengguna
       status (str) : status transaksi (berhasil, gagal);
       error (str) : jenis error (0, 1, 2)
   */
-  void showScreen(String nama_katering, int jumlah, String nik, String status, String error) {
+void showScreen(String nama_katering, int jumlah, String nik, String status, String error) {
 
-    tft.fillScreen(TFT_BLACK);
-    // tft.pushImage(0, 0, 480, 320, image_data_gl);
-    tft.pushImage(tft.width() - 100, 10, 100, 21, image_data_ko);
+  tft.fillScreen(TFT_BLACK);
+  // tft.pushImage(0, 0, 480, 320, image_data_gl);
+  tft.pushImage(tft.width() - 100, 10, 100, 21, image_data_ko);
 
-    if (jumlah > 0) {
-      int16_t textWidth = tft.textWidth(nama_katering, 3);  // font 2
-      // int16_t textHeight = tft.textHeight(nama_katering, 3);
+  if (jumlah > 0) {
+    int16_t textWidth = tft.textWidth(nama_katering, 3);  // font 2
+    // int16_t textHeight = tft.textHeight(nama_katering, 3);
 
-      int16_t centerX = (tft.width() - textWidth) / 2;
-      // int16_t centerY = (tft.height() - textHeight) / 2;
-      tft.setCursor(20, 10);
+    int16_t centerX = (tft.width() - textWidth) / 2;
+    // int16_t centerY = (tft.height() - textHeight) / 2;
+    tft.setCursor(20, 10);
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_BLACK, TFT_YELLOW);
+    tft.setTextFont(4);
+    tft.print("Katering ");
+    tft.println(nama_katering);
+
+    tft.setCursor(tft.width() - 140, 50);
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_WHITE);
+    tft.setTextFont(4);
+    tft.print("NIK : ");
+    tft.println(nik);
+    // tft.println(nama_katering);
+
+    int16_t textWidth_count = tft.textWidth(String(jumlah), 7);
+    int16_t centerX_cout = (tft.width() - (textWidth_count + 40)) / 2;
+    tft.setCursor(60, 70, 7);
+    tft.setTextSize(3);
+    tft.setTextFont(7);
+    tft.setTextColor(TFT_WHITE);
+    // tft.println("300");
+    tft.println(jumlah);
+
+    tft.setCursor(10, tft.height() - 100, 7);
+    tft.setTextSize(1);
+    tft.setTextFont(4);
+
+
+    if (status == "berhasil") {
+
+      tft.setCursor(10, tft.height() - 80, 7);
       tft.setTextSize(1);
-      tft.setTextColor(TFT_BLACK, TFT_YELLOW);
+      tft.setTextColor(TFT_WHITE, TFT_GREEN);
       tft.setTextFont(4);
-      tft.print("Katering ");
-      tft.println(nama_katering);
-
-      tft.setCursor(tft.width() - 140, 50);
-      tft.setTextSize(1);
-      tft.setTextColor(TFT_WHITE);
-      tft.setTextFont(4);
-      tft.print("NIK : ");
-      tft.println(nik);
-      // tft.println(nama_katering);
-
-      int16_t textWidth_count = tft.textWidth(String(jumlah), 7);
-      int16_t centerX_cout = (tft.width() - (textWidth_count + 40)) / 2;
-      tft.setCursor(60, 70, 7);
-      tft.setTextSize(3);
-      tft.setTextFont(7);
-      tft.setTextColor(TFT_WHITE);
-      // tft.println("300");
-      tft.println(jumlah);
-
-      tft.setCursor(10, tft.height() - 100, 7);
-      tft.setTextSize(1);
-      tft.setTextFont(4);
-
-
-      if (status == "berhasil") {
-
-        tft.setCursor(10, tft.height() - 80, 7);
-        tft.setTextSize(1);
-        tft.setTextColor(TFT_WHITE, TFT_GREEN);
-        tft.setTextFont(4);
-        tft.println(F("BERHASIL"));
-        // delay(2000);
-      } else {
-
-        if (error == "1") {
-          error = "Kupon sudah digunakan";
-        } else {
-          error = "Salah Kantin";
-        }
-
-        tft.setCursor(10, tft.height() - 80, 7);
-        tft.setTextSize(1);
-        tft.setTextColor(TFT_WHITE, TFT_RED);
-        tft.setTextFont(4);
-        tft.print(F("GAGAL "));
-        tft.println(error);
-      }
+      tft.println(F("BERHASIL"));
+      // delay(2000);
     } else {
-      int16_t textWidth_count = tft.textWidth("READY!", 7);
-      int16_t centerX_cout = (tft.width() - textWidth_count) / 2;
-      tft.setCursor(centerX_cout, 55, 7);
 
-      tft.setCursor(centerX_cout, 50);
-      tft.setTextSize(2);
-      tft.setTextColor(TFT_WHITE);
+      if (error == "1") {
+        error = "Kupon sudah digunakan";
+      } else {
+        error = "Salah Kantin";
+      }
+
+      tft.setCursor(10, tft.height() - 80, 7);
+      tft.setTextSize(1);
+      tft.setTextColor(TFT_WHITE, TFT_RED);
       tft.setTextFont(4);
-      tft.println("READY!");
+      tft.print(F("GAGAL "));
+      tft.println(error);
     }
-
-
-    delay(400);
+  } else {
+    int16_t textWidth_count = tft.textWidth("READY!", 7);
+    int16_t centerX_cout = (tft.width() - textWidth_count) / 2;
+    tft.setCursor(centerX_cout, 55, 7);
+    tft.setCursor(centerX_cout, 50);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_WHITE);
+    tft.setTextFont(4);
+    tft.println("READY!");
   }
 
+  delay(300);
+}
 
 
-  /*
+
+/*
   function untuk post data transaksi kupon_harian
   Args:
     String id_ardino
@@ -580,51 +555,48 @@ bool getTransaksiPerDay(String id_arduino) {
   returns :
     boolean: jika data berhasil di post  
 */
-  bool sendTransaksi(String id_arduino, int id_kantin, int id_katering, String no_rfid) {
-    if (Ethernet.linkStatus() == LinkON) {
-      if (client.connect(API_HOST.c_str(), 80)) {
-        // MySerial.println("Connected to server");
-        // Trim left pada no_rfid (menghapus spasi di depan)
-        while (no_rfid.length() > 0 && no_rfid[0] == ' ') {
-          no_rfid.remove(0, 1);  // hapus karakter pertama jika spasi
+bool sendTransaksi(String id_arduino, int id_kantin, int id_katering, String no_rfid) {
+  if (Ethernet.linkStatus() == LinkON) {
+    if (client.connect(API_HOST.c_str(), 80)) {
+      // MySerial.println("Connected to server");
+      // Trim left pada no_rfid (menghapus spasi di depan)
+      while (no_rfid.length() > 0 && no_rfid[0] == ' ') {
+        no_rfid.remove(0, 1);  // hapus karakter pertama jika spasi
+      }
+
+      // Data yang akan dikirimkan dalam format JSON
+      String postData = "{\"id_arduino\":\"" + id_arduino + "\","
+                                                            "\"id_kantin\":"
+                        + String(id_kantin) + ","
+                                              "\"id_katering\":"
+                        + String(id_katering) + ","
+                                                "\"no_rfid\":\""
+                        + no_rfid + "\"}";
+
+
+      // Buat request HTTP POST
+      client.println("POST " + API_TRANSACTION + " HTTP/1.0");
+      client.println("Host: " + API_HOST);
+      client.println("Content-Type: application/json");
+      client.println("Connection: close");
+      client.print("Content-Length: ");
+      client.println(postData.length());
+      client.println();
+      client.println(postData);
+
+      // Baca response dari server
+      while (client.connected()) {
+        String line = client.readStringUntil('\n');
+        if (line == "\r") {
+          // MySerial.println("Headers received");
+          break;
         }
+      }
 
-        // Data yang akan dikirimkan dalam format JSON
-        String postData = "{\"id_arduino\":\"" + id_arduino + "\","
-                                                              "\"id_kantin\":"
-                          + String(id_kantin) + ","
-                                                "\"id_katering\":"
-                          + String(id_katering) + ","
-                                                  "\"no_rfid\":\""
-                          + no_rfid + "\"}";
+      // Baca body response
+      String responseBody = client.readString();
 
-
-        // Buat request HTTP POST
-        client.println("POST " + API_TRANSACTION + " HTTP/1.0");
-        client.println("Host: " + API_HOST);
-        client.println("Content-Type: application/json");
-        client.println("Connection: close");
-        client.print("Content-Length: ");
-        client.println(postData.length());
-        client.println();
-        client.println(postData);
-
-        // Baca response dari server
-        while (client.connected()) {
-          String line = client.readStringUntil('\n');
-          if (line == "\r") {
-            // MySerial.println("Headers received");
-            break;
-          }
-        }
-        
-        // Baca body response
-        // String responseBody = readChunkedResponse(client);
-        String responseBody = client.readString();
-      // MySerial.println("Response sendTransaksi");
-      // MySerial.println("Response body: " + responseBody);
-      
-       //consume json response dari api
+      //consume json response dari api
       DynamicJsonDocument doc(1024);
       deserializeJson(doc, responseBody);
 
@@ -634,32 +606,17 @@ bool getTransaksiPerDay(String id_arduino) {
         nik = doc["nik"].as<String>();
         status = doc["status"].as<String>();
         error = doc["error"].as<String>();
-        // condition = true;
         return true;
       }
-      } else {
-        MySerial.println("Connection to server transaksi failed");
-        return false;
-      }
-      // int size;
-      // while ((size = client.available()) > 0) {
-      //   Serial.print("Size is: ");
-      //   Serial.println(size);
-      //   uint8_t *msg = (uint8_t *)malloc(size + 1);
-      //   memset(msg, 0, size + 1);
-      //   size = client.read(msg, size);
-      //   Serial.print("Size1 is: ");
-      //   Serial.println(size);
-      //   Serial.write(msg, size);
-      //   free(msg);
-      // }
-      client.stop();  // Tutup koneksi
-      // Ethernet.maintain();
+    } else {
+      MySerial.println("Connection to server transaksi failed");
       return false;
     }
-    // delay(1000);
+    client.stop();  // Tutup koneksi
     return false;
   }
+  return false;
+}
 
 /*
   Function untuk play sound
@@ -667,18 +624,18 @@ bool getTransaksiPerDay(String id_arduino) {
     *data (pointer array) : array dari hasil konversi file audio .aac (.aac -> char array.H)
     len (int) : panjang array  
 */
-void playSound(const void *data, uint32_t len){
- if (aac->isRunning()) {
+void playSound(const void *data, uint32_t len) {
+  if (aac->isRunning()) {
+    aac->loop();
+  } else {
+    delete in;
+    in = new AudioFileSourcePROGMEM(data, len);
+    aac->begin(in, out);
+    while (aac->isRunning()) {
       aac->loop();
-    } else {
-      delete in;
-      in = new AudioFileSourcePROGMEM(data, len);
-      aac->begin(in, out);
-      while (aac->isRunning()) {
-        aac->loop();
-      }
-      delay(200);
-    }   
+    }
+    // delay(1);
+  }
 }
 
 
@@ -689,7 +646,7 @@ void playSound(const void *data, uint32_t len){
 */
 void playAudioFromString(String s) {
   for (int i = 0; i < s.length(); i++) {
-    char character = s[i]; // Ambil setiap karakter
+    char character = s[i];  // Ambil setiap karakter
     Serial.print("Playing audio for character: ");
     Serial.println(character);
 
@@ -703,12 +660,12 @@ void playAudioFromString(String s) {
         in = new AudioFileSourcePROGMEM(_1, sizeof(_1));  // Ganti dengan path file audio di SD card
         aac->begin(in, out);
         break;
-      
+
       case '2':
         in = new AudioFileSourcePROGMEM(_2, sizeof(_2));  // Ganti dengan path file audio di SD card
         aac->begin(in, out);
         break;
-      
+
       case '3':
         in = new AudioFileSourcePROGMEM(_3, sizeof(_3));  // Ganti dengan path file audio di SD card
         aac->begin(in, out);
@@ -737,12 +694,10 @@ void playAudioFromString(String s) {
         in = new AudioFileSourcePROGMEM(_9, sizeof(_9));  // Ganti dengan path file audio di SD card
         aac->begin(in, out);
         break;
-      
     }
 
-    while(aac->isRunning()){
-        aac->loop();
+    while (aac->isRunning()) {
+      aac->loop();
     }
-   
   }
 }
