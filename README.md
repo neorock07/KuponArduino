@@ -32,12 +32,13 @@ LCD SPI TFT 4 INCH
 
 ![image](https://github.com/user-attachments/assets/fd7bce0c-8b81-41a6-9b6a-005e67c2ade9)
 
+## Result (without Casing)
+
+![image](https://github.com/user-attachments/assets/afa9141d-4e1c-4a77-9509-7f7041306c44)
+
 
 Credit :
 [Tool untuk Convert AAC to C-array](https://notisrac.github.io/FileToCArray/)
-
-
-
 
 
 
