@@ -30,6 +30,12 @@
 #include "berhasil.h"
 #include "beep.h"
 #include "connected.h"
+#include "kartu_tidak_terdaftar.h"
+/*
+  import array image logo konimex
+*/
+#include <stdint.h>
+#include "image_data_kk.h"
 
 
 /*
@@ -38,7 +44,7 @@
 #define Bit_Clock_BCLK 27
 #define Word_Select_WS 26
 #define Serial_Data_SD 25
-#define GAIN 0.4
+#define GAIN 1
 
 AudioFileSourcePROGMEM *in;
 AudioGeneratorAAC *aac;
@@ -48,10 +54,7 @@ AudioOutputI2S *out;
 byte mac[] = { 0x74, 0x69, 0x69, 0x2D, 0x32, 0x33 };
 
 String readString;  //var for url requested, this allows us to serve different pages based on the url
-// String API_HOST = "https://freetestapi.com/api/v1/users/1";  // Host API
-// String API_HOST = "blbqfx2p-80.asse.devtunnels.ms";  // Host API
-// String API_HOST = "blbqfx2p-80.asse.devtunnels.ms";  // Host API
-// String API_HOST = "192.168.137.1";  // Host API
+
 String API_HOST = "192.168.0.119";  // Host API
 String API_MAPPING = "/proyekkuponmakan/api/mapping_arduino_katering/select";
 String API_RFID = "/proyekkuponmakan/api/rfid/select";
@@ -147,10 +150,10 @@ CS -  15   // Chip select control pin
 DC  - 14   // Data Command control pin
 RST - 17   // Reset pin (could connect to RST pin)
 TOUCH_CS - 4     // Chip select pin (T_CS) of touch screen
-
+LED - 3.3V
 
 /////////////////////////////////////////
-//              MAX98357A             //
+//              MAX98357A SPEAKER     //
 ///////////////////////////////////////
 LRC - 26
 BCLK - 27
@@ -171,11 +174,6 @@ NOTE ** :
 
 */
 
-/*
-  import array image logo konimex
-*/
-#include <stdint.h>
-#include "image_data_kk.h"
 
 
 
@@ -187,7 +185,7 @@ void setup() {
   //inisiasi SPI Bus pada VSPI
   SPI.begin(18, 19, 23, MFRC522_CS);
   tft.init();
-  tft.setRotation(1);
+  tft.setRotation(3);
   tft.setSwapBytes(true);
 
 
@@ -224,8 +222,6 @@ void setup() {
 void loop() {
   Ethernet.maintain();
   String rfid_uid = readRfid();
-  // showScreen(katering, jumlah, nik, status, error);
-  // delay(50);
 }
 
 
@@ -317,8 +313,11 @@ String readRfid() {
     } else {
       if (error == "1") {
         playSound(kupon_used, sizeof(kupon_used));
-      } else {
+      } else if(error == "2"){
         playSound(salah_kantin, sizeof(salah_kantin));
+      } 
+      else {
+        playSound(kartu_tidak_terdaftar, sizeof(kartu_tidak_terdaftar));
       }
       showScreen(katering, jumlah, nik, status, error);
     }
@@ -463,7 +462,7 @@ bool getTransaksiPerDay(String id_arduino) {
       jumlah (int) : jumlah transaksi penjualan
       nik (string) : nik pengguna
       status (str) : status transaksi (berhasil, gagal);
-      error (str) : jenis error (0, 1, 2)
+      error (str) : jenis error (0, 1, 2, 3 ) | 0=berhasil;1=sudah digunakan;2=salah kantin;3=kartu tidak terdaftar;
   */
 void showScreen(String nama_katering, int jumlah, String nik, String status, String error) {
 
@@ -473,10 +472,8 @@ void showScreen(String nama_katering, int jumlah, String nik, String status, Str
 
   if (jumlah > 0) {
     int16_t textWidth = tft.textWidth(nama_katering, 3);  // font 2
-    // int16_t textHeight = tft.textHeight(nama_katering, 3);
 
     int16_t centerX = (tft.width() - textWidth) / 2;
-    // int16_t centerY = (tft.height() - textHeight) / 2;
     tft.setCursor(20, 10);
     tft.setTextSize(1);
     tft.setTextColor(TFT_BLACK, TFT_YELLOW);
@@ -513,13 +510,14 @@ void showScreen(String nama_katering, int jumlah, String nik, String status, Str
       tft.setTextColor(TFT_WHITE, TFT_GREEN);
       tft.setTextFont(4);
       tft.println(F("BERHASIL"));
-      // delay(2000);
     } else {
 
       if (error == "1") {
         error = "Kupon sudah digunakan";
-      } else {
+      } else if (error == "2") {
         error = "Salah Kantin";
+      } else {
+        error = "Kartu Belum Terdaftar";
       }
 
       tft.setCursor(10, tft.height() - 80, 7);
@@ -653,45 +651,45 @@ void playAudioFromString(String s) {
     // Pilih file audio berdasarkan karakter
     switch (character) {
       case '0':
-        in = new AudioFileSourcePROGMEM(_0, sizeof(_0));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_0, sizeof(_0));  
         aac->begin(in, out);
         break;
       case '1':
-        in = new AudioFileSourcePROGMEM(_1, sizeof(_1));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_1, sizeof(_1));  
         aac->begin(in, out);
         break;
 
       case '2':
-        in = new AudioFileSourcePROGMEM(_2, sizeof(_2));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_2, sizeof(_2));  
         aac->begin(in, out);
         break;
 
       case '3':
-        in = new AudioFileSourcePROGMEM(_3, sizeof(_3));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_3, sizeof(_3));  
         aac->begin(in, out);
         break;
       case '4':
-        in = new AudioFileSourcePROGMEM(_4, sizeof(_4));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_4, sizeof(_4));  
         aac->begin(in, out);
         break;
       case '5':
-        in = new AudioFileSourcePROGMEM(_5, sizeof(_5));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_5, sizeof(_5));  
         aac->begin(in, out);
         break;
       case '6':
-        in = new AudioFileSourcePROGMEM(_6, sizeof(_6));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_6, sizeof(_6));  
         aac->begin(in, out);
         break;
       case '7':
-        in = new AudioFileSourcePROGMEM(_7, sizeof(_7));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_7, sizeof(_7));  
         aac->begin(in, out);
         break;
       case '8':
-        in = new AudioFileSourcePROGMEM(_8, sizeof(_8));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_8, sizeof(_8));  
         aac->begin(in, out);
         break;
       case '9':
-        in = new AudioFileSourcePROGMEM(_9, sizeof(_9));  // Ganti dengan path file audio di SD card
+        in = new AudioFileSourcePROGMEM(_9, sizeof(_9));  
         aac->begin(in, out);
         break;
     }
